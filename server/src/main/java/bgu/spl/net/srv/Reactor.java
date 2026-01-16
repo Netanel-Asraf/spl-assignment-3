@@ -2,6 +2,7 @@ package bgu.spl.net.srv;
 
 import bgu.spl.net.api.MessageEncoderDecoder;
 import bgu.spl.net.api.MessagingProtocol;
+import bgu.spl.net.api.StompMessagingProtocol; // Add this!
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.channels.ClosedSelectorException;
@@ -15,14 +16,17 @@ import java.util.function.Supplier;
 public class Reactor<T> implements Server<T> {
 
     private final int port;
-    private final Supplier<MessagingProtocol<T>> protocolFactory;
+    private final Supplier<StompMessagingProtocol<T>> protocolFactory; // Change to Stomp factory
     private final Supplier<MessageEncoderDecoder<T>> readerFactory;
     private final ActorThreadPool pool;
     private Selector selector;
+    private final ConnectionsImpl<T> connections = new ConnectionsImpl<>(); // Add the Phonebook!
+    private int connectionIdCounter = 0; // Add the ID counter!
 
     private Thread selectorThread;
     private final ConcurrentLinkedQueue<Runnable> selectorTasks = new ConcurrentLinkedQueue<>();
 
+    @SuppressWarnings("unchecked")
     public Reactor(
             int numThreads,
             int port,
@@ -31,30 +35,29 @@ public class Reactor<T> implements Server<T> {
 
         this.pool = new ActorThreadPool(numThreads);
         this.port = port;
-        this.protocolFactory = protocolFactory;
+        // CASTING MAGIC: Just like in BaseServer!
+        this.protocolFactory = (Supplier<StompMessagingProtocol<T>>) (Object) protocolFactory;
         this.readerFactory = readerFactory;
     }
 
     @Override
     public void serve() {
-	selectorThread = Thread.currentThread();
+        selectorThread = Thread.currentThread();
         try (Selector selector = Selector.open();
                 ServerSocketChannel serverSock = ServerSocketChannel.open()) {
 
-            this.selector = selector; //just to be able to close
+            this.selector = selector; 
 
             serverSock.bind(new InetSocketAddress(port));
             serverSock.configureBlocking(false);
             serverSock.register(selector, SelectionKey.OP_ACCEPT);
-			System.out.println("Server started");
+            System.out.println("Server started");
 
             while (!Thread.currentThread().isInterrupted()) {
-
                 selector.select();
                 runSelectionThreadTasks();
 
                 for (SelectionKey key : selector.selectedKeys()) {
-
                     if (!key.isValid()) {
                         continue;
                     } else if (key.isAcceptable()) {
@@ -63,15 +66,11 @@ public class Reactor<T> implements Server<T> {
                         handleReadWrite(key);
                     }
                 }
-
-                selector.selectedKeys().clear(); //clear the selected keys set so that we can know about new events
-
+                selector.selectedKeys().clear();
             }
 
         } catch (ClosedSelectorException ex) {
-            //do nothing - server was requested to be closed
         } catch (IOException ex) {
-            //this is an error
             ex.printStackTrace();
         }
 
@@ -79,6 +78,43 @@ public class Reactor<T> implements Server<T> {
         pool.shutdown();
     }
 
+    private void handleAccept(ServerSocketChannel serverChan, Selector selector) throws IOException {
+        SocketChannel clientChan = serverChan.accept();
+        clientChan.configureBlocking(false);
+
+        // 1. Get the real Stomp protocol
+        StompMessagingProtocol<T> stompProtocol = protocolFactory.get();
+        
+        // 2. Initialize it
+        stompProtocol.start(connectionIdCounter, connections);
+
+        // 3. THE ADAPTER: Bridge Stomp to the Reactor's expected interface
+        MessagingProtocol<T> adapter = new MessagingProtocol<T>() {
+            @Override
+            public T process(T msg) {
+                stompProtocol.process(msg);
+                return null; // Stomp sends via connections.send()
+            }
+            @Override
+            public boolean shouldTerminate() {
+                return stompProtocol.shouldTerminate();
+            }
+        };
+
+        final NonBlockingConnectionHandler<T> handler = new NonBlockingConnectionHandler<>(
+                readerFactory.get(),
+                adapter,
+                clientChan,
+                this);
+
+        // 4. Register in Phonebook
+        connections.connect(connectionIdCounter, handler);
+        connectionIdCounter++;
+
+        clientChan.register(selector, SelectionKey.OP_READ, handler);
+    }
+
+    // ... (keep the rest of Reactor.java the same) ...
     /*package*/ void updateInterestedOps(SocketChannel chan, int ops) {
         final SelectionKey key = chan.keyFor(selector);
         if (Thread.currentThread() == selectorThread) {
@@ -89,18 +125,6 @@ public class Reactor<T> implements Server<T> {
             });
             selector.wakeup();
         }
-    }
-
-
-    private void handleAccept(ServerSocketChannel serverChan, Selector selector) throws IOException {
-        SocketChannel clientChan = serverChan.accept();
-        clientChan.configureBlocking(false);
-        final NonBlockingConnectionHandler<T> handler = new NonBlockingConnectionHandler<>(
-                readerFactory.get(),
-                protocolFactory.get(),
-                clientChan,
-                this);
-        clientChan.register(selector, SelectionKey.OP_READ, handler);
     }
 
     private void handleReadWrite(SelectionKey key) {
@@ -114,7 +138,7 @@ public class Reactor<T> implements Server<T> {
             }
         }
 
-	    if (key.isValid() && key.isWritable()) {
+        if (key.isValid() && key.isWritable()) {
             handler.continueWrite();
         }
     }
@@ -127,7 +151,6 @@ public class Reactor<T> implements Server<T> {
 
     @Override
     public void close() throws IOException {
-        selector.close();
+        if (selector != null) selector.close();
     }
-
 }
