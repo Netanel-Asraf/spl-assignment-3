@@ -1,22 +1,46 @@
 package bgu.spl.net.api;
 
+import bgu.spl.net.impl.stomp.Frame;
 import bgu.spl.net.srv.Connections;
+import bgu.spl.net.srv.ConnectionsImpl;
+
 
 public class StompMessagingProtocolImpl implements StompMessagingProtocol<String> {
     private int connectionId;
-    private Connections<String> connections;
+    private ConnectionsImpl<String> connections;
     private boolean shouldTerminate = false;
+    
     @Override
     public void start(int connectionId, Connections<String> connections) {
         this.connectionId = connectionId;
-        this.connections = connections;
+        this.connections = (ConnectionsImpl<String>) connections;
     }
 
     @Override
     public void process(String message) {
-        if(message.startsWith("CONNECT")){
-            
-            connections.send(connectionId, "CONNECTED\nversion:1.2\n\n\u0000");
+        // 1. Parse the message using our Frame helper
+        Frame frame = Frame.parse(message);
+        
+        // 2. Switch based on the Command
+        switch (frame.getCommand()) {
+            case "CONNECT":
+                handleConnect(frame); // <--- Now we actually use your login logic!
+                break;
+            case "SUBSCRIBE":
+                handleSubscribe(frame); // <--- Now we handle subscriptions!
+                break;
+            case "UNSUBSCRIBE":
+                // handleUnsubscribe(frame);
+                break;
+            case "SEND":
+                // handleSend(frame);
+                break;
+            case "DISCONNECT":
+                // handleDisconnect(frame);
+                break;
+            default:
+                // Even if unknown, we might want to log it or send error
+                sendError(frame, "Unknown Command");
         }
     }
 
@@ -24,5 +48,74 @@ public class StompMessagingProtocolImpl implements StompMessagingProtocol<String
     public boolean shouldTerminate() {
         return shouldTerminate;
     }
+
+    private void handleSubscribe(Frame frame) {
+        String topic = frame.getHeaders().get("destination");
+        String subId = frame.getHeaders().get("id");
+        String receipt = frame.getHeaders().get("receipt"); // Get receipt if it exists
+
+        // 1. Validate
+        if (topic == null || subId == null) {
+            sendError(frame, "Malformed SUBSCRIBE frame: missing destination or id");
+            return;
+        }
+
+        // 2. Subscribe using the phonebook
+        connections.subscribe(topic, connectionId, subId);
+
+        // 3. Send Receipt (Only if client asked for it!)
+        if (receipt != null) {
+            Frame receiptFrame = new Frame("RECEIPT", new java.util.HashMap<>(), null);
+            receiptFrame.getHeaders().put("receipt-id", receipt);
+            connections.send(connectionId, receiptFrame.toString());
+        }
+    }
+
+    private void handleConnect(Frame frame) {
+        String login = frame.getHeaders().get("login");
+        String passcode = frame.getHeaders().get("passcode");
+
+        // 1. Validate Headers
+        if (login == null || passcode == null) {
+            sendError(frame, "Malfromed Frame: Missing login or passcode header");
+            shouldTerminate = true; // Close connection
+            return;
+        }
+
+        // 2. Try to Login
+        // We use our new 'connect' method in ConnectionsImpl
+        boolean success = connections.connect(connectionId, login, passcode);
+
+        if (success) {
+            // Login Success!
+            connections.send(connectionId, "CONNECTED\nversion:1.2\n\n");
+        } else {
+            // Login Failed (Wrong password or already logged in)
+            sendError(frame, "Login failed: User already logged in or wrong password");
+            shouldTerminate = true; // Close connection after error [cite: 114]
+        }
+    }
+
+    // Helper to send ERROR frames cleanly [cite: 113-117]
+    private void sendError(Frame frame, String message) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("ERROR\n");
+        
+        // If the client sent a receipt-id, we should include it
+        if (frame != null && frame.getHeaders().containsKey("receipt")) {
+            sb.append("receipt-id:").append(frame.getHeaders().get("receipt")).append("\n");
+        }
+        
+        sb.append("message:").append(message).append("\n");
+        sb.append("\n"); // Empty line
+        sb.append("The message:\n-----\n");
+        if (frame != null) {
+            sb.append(frame.toString());
+        }
+        sb.append("\n-----\n");
+        
+        connections.send(connectionId, sb.toString());
+    }
+    
     
 }
