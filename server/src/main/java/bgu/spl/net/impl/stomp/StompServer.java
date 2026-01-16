@@ -4,11 +4,10 @@ import java.util.function.Supplier;
 
 import bgu.spl.net.api.StompMessageEncoderDecoder;
 import bgu.spl.net.api.StompMessagingProtocolImpl;
-import bgu.spl.net.impl.echo.LineMessageEncoderDecoder;
 import bgu.spl.net.srv.Server;
 
 public class StompServer {
-
+    @SuppressWarnings({"unchecked", "rawtypes"})
     public static void main(String[] args) {
         int port = 7777;
         if (args.length > 0) {
