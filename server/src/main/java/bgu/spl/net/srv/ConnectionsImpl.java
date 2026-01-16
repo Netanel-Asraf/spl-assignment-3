@@ -13,6 +13,7 @@ public class ConnectionsImpl<T> implements Connections<T> {
     // This tracks who is currently logged in to prevent double logins.
     private final ConcurrentHashMap<String, Integer> activeUsers = new ConcurrentHashMap<>();
 
+    private int messageIdCounter = 0;
 
     @Override
     public boolean send(int connectionId, T msg) {
@@ -29,17 +30,23 @@ public class ConnectionsImpl<T> implements Connections<T> {
     public void send(String channel, T msg) {
         ConcurrentHashMap<Integer, String> subscribers = topics.get(channel);
         if (subscribers != null) {
+            // Generate a unique message ID for this broadcast
+            String msgId = Integer.toString(messageIdCounter++);
+
             for (Map.Entry<Integer, String> entry : subscribers.entrySet()) {
                 Integer connectionId = entry.getKey();
                 String subscriptionId = entry.getValue();
 
-                if (msg instanceof String) {
-                    T personalizedMsg = (T) ("subscription:" + subscriptionId + "\n" + msg); 
-                    send(connectionId, personalizedMsg);
-                } 
-                else {
-                    send(connectionId, msg);
-                }
+                // Construct the valid STOMP frame
+                // Note: 'msg' here is treated as the Body of the message
+                String frame = "MESSAGE\n" +
+                               "subscription:" + subscriptionId + "\n" +
+                               "message-id:" + msgId + "\n" +
+                               "destination:" + channel + "\n" +
+                               "\n" +
+                               msg; // The actual body content
+
+                send(connectionId, (T) frame);
             }
         }
     }
@@ -55,6 +62,10 @@ public class ConnectionsImpl<T> implements Connections<T> {
     
     public void connect(int connectionId, ConnectionHandler<T> handler) {
         connectionMap.put(connectionId, handler);
+    }
+
+    public boolean isSubscribed(String channel, int connectionId) {
+        return topics.containsKey(channel) && topics.get(channel).containsKey(connectionId);
     }
 
     // 4. NEW: Helper for Protocol (The Login Logic)
@@ -87,5 +98,19 @@ public class ConnectionsImpl<T> implements Connections<T> {
         
         // Add the client to the topic
         topics.get(channel).put(connectionId, subscriptionId);
+    }
+
+    public void unsubscribe(String subscriptionId, int connectionId) {
+        // Iterate over all topics to find where this user subscribed with this ID
+        for (Map.Entry<String, ConcurrentHashMap<Integer, String>> topicEntry : topics.entrySet()) {
+            ConcurrentHashMap<Integer, String> subscribers = topicEntry.getValue();
+            
+            // Check if this connection has this subscription ID in this topic
+            if (subscribers.containsKey(connectionId) && subscribers.get(connectionId).equals(subscriptionId)) {
+                subscribers.remove(connectionId);
+                // Note: We don't break here just in case (though IDs should be unique per connection)
+                // return; // Optional: return if you want to stop after first match
+            }
+        }
     }
 }

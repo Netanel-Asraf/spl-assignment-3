@@ -30,13 +30,13 @@ public class StompMessagingProtocolImpl implements StompMessagingProtocol<String
                 handleSubscribe(frame); // <--- Now we handle subscriptions!
                 break;
             case "UNSUBSCRIBE":
-                // handleUnsubscribe(frame);
+                handleUnsubscribe(frame);
                 break;
             case "SEND":
-                // handleSend(frame);
+                handleSend(frame);
                 break;
             case "DISCONNECT":
-                // handleDisconnect(frame);
+                handleDisconnect(frame);
                 break;
             default:
                 // Even if unknown, we might want to log it or send error
@@ -64,6 +64,74 @@ public class StompMessagingProtocolImpl implements StompMessagingProtocol<String
         connections.subscribe(topic, connectionId, subId);
 
         // 3. Send Receipt (Only if client asked for it!)
+        if (receipt != null) {
+            Frame receiptFrame = new Frame("RECEIPT", new java.util.HashMap<>(), null);
+            receiptFrame.getHeaders().put("receipt-id", receipt);
+            connections.send(connectionId, receiptFrame.toString());
+        }
+    }
+
+    private void handleSend(Frame frame) {
+        String topic = frame.getHeaders().get("destination");
+        String body = frame.getBody();
+
+        // 1. Validate
+        if (topic == null) {
+            sendError(frame, "Malformed SEND frame: missing destination");
+            return;
+        }
+
+        // 2. Permission Check
+        // "if a client is not subscribed to a topic it is not allowed to send messages to it" 
+        if (!connections.isSubscribed(topic, connectionId)) {
+            sendError(frame, "Permission denied: You are not subscribed to this topic");
+            return;
+        }
+
+        // 3. Broadcast
+        // We pass the 'body' string. ConnectionsImpl will wrap it in a MESSAGE frame.
+        connections.send(topic, body);
+        
+        // 4. Receipt (Optional)
+        if (frame.getHeaders().containsKey("receipt")) {
+            Frame receiptFrame = new Frame("RECEIPT", new java.util.HashMap<>(), null);
+            receiptFrame.getHeaders().put("receipt-id", frame.getHeaders().get("receipt"));
+            connections.send(connectionId, receiptFrame.toString());
+        }
+    }
+
+    private void handleDisconnect(Frame frame) {
+        String receipt = frame.getHeaders().get("receipt");
+
+        // 1. Send Receipt (Crucial for graceful shutdown!)
+        if (receipt != null) {
+            Frame receiptFrame = new Frame("RECEIPT", new java.util.HashMap<>(), null);
+            receiptFrame.getHeaders().put("receipt-id", receipt);
+            connections.send(connectionId, receiptFrame.toString());
+        }
+
+        // 2. Mark for termination
+        // The BaseServer loop checks this boolean. If true, it exits the loop and closes the socket.
+        shouldTerminate = true; 
+        
+        // Note: The actual socket close and cleanup happens in BaseServer 
+        // because 'shouldTerminate()' returns true.
+    }
+
+    private void handleUnsubscribe(Frame frame) {
+        String subId = frame.getHeaders().get("id");
+        String receipt = frame.getHeaders().get("receipt");
+
+        // 1. Validate
+        if (subId == null) {
+            sendError(frame, "Malformed UNSUBSCRIBE frame: missing id header");
+            return;
+        }
+
+        // 2. Unsubscribe
+        connections.unsubscribe(subId, connectionId);
+
+        // 3. Receipt
         if (receipt != null) {
             Frame receiptFrame = new Frame("RECEIPT", new java.util.HashMap<>(), null);
             receiptFrame.getHeaders().put("receipt-id", receipt);
