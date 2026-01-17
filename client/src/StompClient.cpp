@@ -45,7 +45,7 @@ int main(int argc, char *argv[]) {
 			{
 				if(parts.size() < 4)
 				{
-					std::cout << "Usage: login {host:port} {user} {password}" << std::endl;
+					std::cout << "Usage: login {host:port} {user} {password}\n" << std::endl;
 					continue;
 				}
 
@@ -53,7 +53,7 @@ int main(int argc, char *argv[]) {
 				short port;
 				if(!parseHostAndPort(parts[1], host, port))
 				{
-					std::cout << "Invalid host:port format" << std::endl;
+					std::cout << "Invalid host:port format.\n" << std::endl;
 					continue;
 				}
 
@@ -61,7 +61,7 @@ int main(int argc, char *argv[]) {
 
 				if(!connectionHandler->connect())
 				{
-					std::cout << "Could not connect to server" << std::endl;
+					std::cout << "Could not connect to server.\n" << std::endl;
 					delete connectionHandler;
 					connectionHandler = nullptr;
 					continue;
@@ -72,8 +72,8 @@ int main(int argc, char *argv[]) {
 				socketThread = new std::thread([connectionHandler, &protocol, &isConnected]() {
                     while (isConnected) {
                         std::string answer;
-                        // If getLine fails (server disconnects), we break
-                        if (!connectionHandler->getLine(answer)) {
+                        if (!connectionHandler->getFrameAscii(answer, '\0')) {
+						// if (!connectionHandler->getLine(answer)) {
                             std::cout << "Disconnected from server.\n" << std::endl;
                             isConnected = false;
                             break;
@@ -93,16 +93,18 @@ int main(int argc, char *argv[]) {
 			}
 			else
 			{
-				std::cout << "You need to login first" << std::endl;
+				std::cout << "You need to login first.\n" << std::endl;
 			}
 		}
 		else
 		{
 			std::vector<std::string> frames = protocol.processInput(line, *connectionHandler);
 			for(auto& frame : frames) {
-				if(!connectionHandler->sendLine(frame)) {
+				if (!connectionHandler->sendBytes(frame.c_str(), frame.length())) {
+				// if(!connectionHandler->sendLine(frame)) {
 					std::cout << "Error sending message. Disconnecting.\n" << std::endl;
 					isConnected = false;
+					break;
 				}
 			}
 		}

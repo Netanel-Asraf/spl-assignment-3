@@ -41,4 +41,5 @@ public:
     std::vector<std::string> processInput(const std::string& line, ConnectionHandler& handler);
     bool processServerResponse(std::string& frame);
     std::vector<std::string> split(const std::string &str, char delimiter);
+    void parseAndSaveGameMsg(const std::string& frame);
 };
