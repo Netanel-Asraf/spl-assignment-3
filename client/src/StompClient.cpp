@@ -116,6 +116,7 @@ int main(int argc, char *argv[]) {
                 delete socketThread;
                 socketThread = nullptr;
             }
+			
             // Close connection
             connectionHandler->close();
             delete connectionHandler;

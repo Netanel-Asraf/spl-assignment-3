@@ -27,7 +27,14 @@ std::vector<std::string> StompProtocol::processInput(const std::string& line, Co
     std::string command = args[0];
 
     if (command == "login") {
-        std::string frame = "CONNECT\naccept-version:1.2\nhost:stomp.cs.bgu.ac.il\nlogin:" + args[2] + "\npasscode:" + args[3] + "\n\n\0";
+        activeUser = args[2];
+        userPassword = args[3];
+
+        std::string frame = "CONNECT\n"
+                            "accept-version:1.2\n"
+                            "host:stomp.cs.bgu.ac.il\n"
+                            "login:" + activeUser + "\n"
+                            "passcode:" + userPassword + "\n\n\0";
         frames.push_back(frame);
     }
     else if (command == "join") {
@@ -54,26 +61,25 @@ std::vector<std::string> StompProtocol::processInput(const std::string& line, Co
     else if (command == "report") {
         std::string filename = args[1];
         names_and_events parsed_data;
+
         try {
             parsed_data = parseEventsFile(filename);
         } catch (std::exception& e) {
             std::cerr << "Error parsing file: " << e.what() << std::endl;
-            return frames; // Return empty vector
+            return frames;
         }
+
         for (const auto& event : parsed_data.events) {
-            std::string frame = "SEND\n";
-            frame += "destination:/" + parsed_data.team_a_name + "_" + parsed_data.team_b_name + "\n";
-            frame += "\n"; // End of headers
+            std::string frame = "SEND\ndestination:/" + parsed_data.team_a_name + "_" + parsed_data.team_b_name + "\n\n";
             
             // Body (Strict formatting required by assignment)
-            frame += "user: " + args[2] + "\n"; // Assuming args[2] is username
+            frame += "user: " + activeUser + "\n";
             frame += "team a: " + parsed_data.team_a_name + "\n";
             frame += "team b: " + parsed_data.team_b_name + "\n";
             frame += "event name: " + event.get_name() + "\n";
             frame += "time: " + std::to_string(event.get_time()) + "\n";
+
             frame += "general game updates:\n";
-            
-            // Iterate general updates map
             for (const auto& pair : event.get_game_updates()) {
                 frame += pair.first + ":" + pair.second + "\n";
             }
@@ -88,24 +94,38 @@ std::vector<std::string> StompProtocol::processInput(const std::string& line, Co
                 frame += pair.first + ":" + pair.second + "\n";
             }
 
-            frame += "description:\n" + event.get_description() + "\n";
-            frame += "\0"; // NULL TERMINATOR
+            frame += "description:\n" + event.get_description() + "\n\0";
 
             frames.push_back(frame);
         }
     }
     else if(command == "summary") {
         std::string game_name = args[1];
-        std::string user = args[2];
+        std::string user_filter = args[2];
         std::string file_path = args[3];
 
         if(games.find(game_name) == games.end()) {
-            std::cerr << "Game not found in memory." << std::endl;
+            std::cerr << "Game " << game_name << " not found in memory." << std::endl;
             return frames;
         }
 
         GameStats& game = games[game_name];
-        
+
+        std::vector<Event> summary_events;
+
+        // Filter by user argument
+        for (const auto& evt : game.events) {
+            if (evt.get_reported_by() == user_filter) {
+                summary_events.push_back(evt);
+            }
+        }
+
+        // Sort events by time
+        std::sort(summary_events.begin(), summary_events.end(), [](const Event& a, const Event& b) {
+            return a.get_time() < b.get_time();
+        });
+
+        // Write to file
         std::ofstream file(file_path);
         if (!file.is_open()) {
             std::cerr << "Could not open file: " << file_path << std::endl;
@@ -114,25 +134,23 @@ std::vector<std::string> StompProtocol::processInput(const std::string& line, Co
 
         file << game.team_a_name << " vs " << game.team_b_name << "\n";
         file << "Game stats:\n";
+
         file << "General stats:\n";
         for(const auto& p : game.general_stats) file << p.first << ":" << p.second << "\n";
         
-        file << game.team_a_name << " stats:\n"; // You need to save team names in GameStats
+        file << game.team_a_name << " stats:\n"; 
         for(const auto& p : game.team_a_stats) file << p.first << ":" << p.second << "\n";
         
         file << game.team_b_name << " stats:\n";
         for(const auto& p : game.team_b_stats) file << p.first << ":" << p.second << "\n";
 
         file << "Game event reports:\n";
-        // Usually required to print events chronologically
-        for(const auto& event : game.events) {
+        for(const auto& event : summary_events) {
             file << event.get_time() << " - " << event.get_name() << ":\n";
             file << event.get_description() << "\n\n";
         }
-
         file.close();
     }
-
     return frames;
 }
 
@@ -177,39 +195,47 @@ bool StompProtocol::processServerResponse(std::string& frame) {
 void StompProtocol::parseAndSaveGameMsg(const std::string& frame) {
     std::string body = frame.substr(frame.find("\n\n") + 2);
     std::vector<std::string> lines = split(body, '\n');
-    std::map<std::string, std::string> updates;
-    std::string current_section = "";
 
+    std::string current_section = "";
     int time = 0;
-    std::string team_a, team_b, event_name, description, reported_by;
+    std::string team_a, team_b, event_name, description, reported_by = "";
     std::map<std::string, std::string> general_updates, a_updates, b_updates;
 
     for (const auto& line : lines) {
         if (line.empty()) continue;
         
         // Identify current section
-        if (line == "general game updates:") { current_section = "general"; continue; }
-        else if (line == "team a updates:") { current_section = "team_a"; continue; }
-        else if (line == "team b updates:") { current_section = "team_b"; continue; }
-        else if (line == "description:") { current_section = "description"; continue; }
+        if (line == "general game updates:") { 
+            current_section = "general";
+            continue; 
+        } else if (line == "team a updates:") {
+            current_section = "team_a";
+            continue; 
+        } else if (line == "team b updates:") {
+            current_section = "team_b";
+            continue;
+        } else if (line == "description:") { 
+            current_section = "description";
+            continue;
+        }
 
-        // Parse key:value
         size_t colon = line.find(':');
         if (current_section == "description") {
             description += line + "\n";
         } else if (colon != std::string::npos) {
             std::string key = line.substr(0, colon);
-            std::string val = line.substr(colon + 1);
+            std::string value = line.substr(colon + 1);
             
             if (current_section == "") {
-                if (key == "user") reported_by = val;
-                else if (key == "team a") team_a = val;
-                else if (key == "team b") team_b = val;
-                else if (key == "event name") event_name = val;
-                else if (key == "time") time = std::stoi(val);
-            } else if (current_section == "general") general_updates[key] = val;
-            else if (current_section == "team_a") a_updates[key] = val;
-            else if (current_section == "team_b") b_updates[key] = val;
+                if (key == "user") reported_by = value;
+                else if (key == "team a") team_a = value;
+                else if (key == "team b") team_b = value;
+                else if (key == "event name") event_name = value;
+                else if (key == "time") time = std::stoi(value);
+            } 
+            else if (current_section == "general") general_updates[key] = value;
+            else if (current_section == "team_a") a_updates[key] = value;
+            else if (current_section == "team_b") b_updates[key] = value;
         }
 
         std::string game_name = team_a + "_" + team_b;
@@ -224,11 +250,10 @@ void StompProtocol::parseAndSaveGameMsg(const std::string& frame) {
 
         GameStats& game = games[game_name];
 
-        for(auto& p : general_updates) game.general_stats[p.first] = p.second;
-        for(auto& p : a_updates) game.team_a_stats[p.first] = p.second;
-        for(auto& p : b_updates) game.team_b_stats[p.first] = p.second;
+        for(auto& pair : general_updates) game.general_stats[pair.first] = pair.second;
+        for(auto& pair : a_updates) game.team_a_stats[pair.first] = pair.second;
+        for(auto& pair : b_updates) game.team_b_stats[pair.first] = pair.second;
 
-        Event evt(team_a, team_b, event_name, time, general_updates, a_updates, b_updates, description);
-        // reported by
+        Event evt(team_a, team_b, event_name, time, general_updates, a_updates, b_updates, description, reported_by);
         game.events.push_back(evt);
     }

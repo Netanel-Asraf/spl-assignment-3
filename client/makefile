@@ -21,6 +21,9 @@ bin/event.o: src/event.cpp
 bin/StompClient.o: src/StompClient.cpp
 	g++ $(CFLAGS) -o bin/StompClient.o src/StompClient.cpp
 
+bin/StompProtocol.o: src/StompProtocol.cpp
+	g++ $(CFLAGS) -o bin/StompProtocol.o src/StompProtocol.cpp
+
 .PHONY: clean
 clean:
 	rm -f bin/*

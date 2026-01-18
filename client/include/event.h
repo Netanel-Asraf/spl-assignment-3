@@ -25,8 +25,10 @@ private:
     // description of the event
     std::string description;
 
+    std::string reported_by;
+
 public:
-    Event(std::string name, std::string team_a_name, std::string team_b_name, int time, std::map<std::string, std::string> game_updates, std::map<std::string, std::string> team_a_updates, std::map<std::string, std::string> team_b_updates, std::string discription);
+    Event(std::string name, std::string team_a_name, std::string team_b_name, int time, std::map<std::string, std::string> game_updates, std::map<std::string, std::string> team_a_updates, std::map<std::string, std::string> team_b_updates, std::string discription, std::string reported_by);
     Event(const std::string & frame_body);
     virtual ~Event();
     const std::string &get_team_a_name() const;
@@ -37,6 +39,7 @@ public:
     const std::map<std::string, std::string> &get_team_a_updates() const;
     const std::map<std::string, std::string> &get_team_b_updates() const;
     const std::string &get_description() const;
+    const std::string &get_reported_by() const;
 };
 
 // an object that holds the names of the teams and a vector of events, to be returned by the parseEventsFile function

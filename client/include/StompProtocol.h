@@ -32,6 +32,9 @@ private:
     bool isConnected;
     bool shouldTerminate;
 
+    std::string activeUser;
+    std::string userPassword;
+
     std::map<std::string, int> subscriptions;
     std::map<int, std::string> pendingReplies;
     std::map<std::string, GameStats> games;
