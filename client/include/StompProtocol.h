@@ -34,6 +34,7 @@ private:
     std::map<std::string, int> subscriptions;
     std::map<int, std::string> pendingReplies;
     std::map<std::string, GameStats> games;
+    std::mutex gameLock;
 
 public:
     StompProtocol();

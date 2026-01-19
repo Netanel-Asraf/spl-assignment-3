@@ -129,6 +129,8 @@ std::vector<std::string> StompProtocol::processInput(const std::string& line, Co
         std::string user_filter = args[2];
         std::string file_path = args[3];
 
+        std::lock_guard<std::mutex> lock(gameLock); // Ensure thread safety
+
         if(games.find(game_name) == games.end()) {
             std::cerr << "Game " << game_name << " not found in memory." << std::endl;
             return frames;
@@ -227,7 +229,9 @@ void StompProtocol::parseAndSaveGameMsg(const std::string& frame) {
     std::map<std::string, std::string> general_updates, a_updates, b_updates;
 
     for (const auto& line : lines) {
-        if (line.empty()) continue;
+        if (line.empty() || line == "\0") {
+            continue;
+        }
         
         // Identify current section
         if (line == "general game updates:") { 
@@ -264,6 +268,8 @@ void StompProtocol::parseAndSaveGameMsg(const std::string& frame) {
         }
 
         std::string game_name = team_a + "_" + team_b;
+
+        std::lock_guard<std::mutex> lock(gameLock); // Ensure thread safety
 
         if (games.find(game_name) == games.end()) {
             GameStats gs;

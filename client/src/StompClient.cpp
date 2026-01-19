@@ -34,7 +34,14 @@ int main(int argc, char *argv[]) {
 		const short bufsize = 1024;
         char buf[bufsize];
         std::cin.getline(buf, bufsize);
+
+		// Check for EOF or error
+		if (!std::cin) {
+			break;
+		}
         std::string line(buf);
+
+		if (line.empty()) { continue; }
 
 		if(!isConnected)
 		{
@@ -67,25 +74,37 @@ int main(int argc, char *argv[]) {
 
 				isConnected = true;
 				std::cout << "-> Connected to server.\n" << std::endl;
+				try{
+					socketThread = new std::thread([connectionHandler, &protocol, &isConnected]() {
+						try{
+						std::cout << "-> Socket thread started.\n" << std::endl;
+						while (isConnected) {
+							std::string answer;
+							if (!connectionHandler->getFrameAscii(answer, '\0')) {
+								std::cout << "Disconnected from server.\n" << std::endl;
+								isConnected = false;
+								break;
+							}
 
-				socketThread = new std::thread([connectionHandler, &protocol, &isConnected]() {
-					std::cout << "-> Socket thread started.\n" << std::endl;
-                    while (isConnected) {
-                        std::string answer;
-                        if (!connectionHandler->getFrameAscii(answer, '\0')) {
-                            std::cout << "Disconnected from server.\n" << std::endl;
-                            isConnected = false;
-                            break;
-                        }
-
-						std::cout << "-> Received message from server.\n" << std::endl;
-                        bool shouldContinue = protocol.processServerResponse(answer);
-                        if (!shouldContinue) {
-                            isConnected = false;
-                            break;
-                        }
-                    }
-                });
+							std::cout << "-> Received message from server.\n" << std::endl;
+							bool shouldContinue = protocol.processServerResponse(answer);
+							if (!shouldContinue) {
+								isConnected = false;
+								break;
+							}
+						}
+						} catch (const std::exception& e) {
+							std::cout << "Exception in socket thread: " << e.what() << std::endl;
+							isConnected = false;
+						}
+					});
+				} catch (const std::exception& e) {
+					std::cout << "Failed to create thread: " << e.what() << std::endl;
+					delete connectionHandler;
+					connectionHandler = nullptr;
+					isConnected = false;
+					continue;
+				}
 
 				// Send frame
 				std::cout << "-> Sending login frame.\n" << std::endl;
@@ -122,7 +141,10 @@ int main(int argc, char *argv[]) {
 			}
 		}
 
-		if (!isConnected && connectionHandler != nullptr) {
+		if (!isConnected && connectionHandler != nullptr) 
+		{
+			connectionHandler->close();
+
             // Join the thread to ensure it's finished
             if (socketThread && socketThread->joinable()) {
                 socketThread->join();
@@ -136,6 +158,17 @@ int main(int argc, char *argv[]) {
             connectionHandler = nullptr;
 		}
 	}
+
+	// Cleanup on exit
+	if (connectionHandler != nullptr) {
+        connectionHandler->close();
+        if (socketThread && socketThread->joinable()) {
+            socketThread->join();
+            delete socketThread;
+        }
+        delete connectionHandler;
+    }
+
 	return 0;
 }
 
