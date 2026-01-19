@@ -43,24 +43,44 @@ std::vector<std::string> StompProtocol::processInput(const std::string& line, Co
         frames.push_back(frame);
     }
     else if (command == "join") {
-        std::string topic = args[1];
+        // FIX: Add the slash so it matches the report command!
+        std::string topic = "/" + args[1]; 
+        
+        receiptCounter++; // (Don't forget the fix from Mission 1!)
         subscriptionCounter++;
         subscriptions[topic] = subscriptionCounter;
-        std::string frame = "SUBSCRIBE\ndestination:" + topic + "\nid:" + std::to_string(subscriptionCounter) + "\nreceipt:" + std::to_string(receiptCounter++) + "\n\n\0";
+        
+        pendingReplies[receiptCounter] = "Joined channel " + args[1]; // Keep display name clean if you want
+        
+        std::string frame = "SUBSCRIBE\ndestination:" + topic + "\nid:" + std::to_string(subscriptionCounter) + "\nreceipt:" + std::to_string(receiptCounter) + "\n\n\0";
         frames.push_back(frame);
     }
     else if (command == "exit") {
-        std::string topic = args[1];
+        // FIX: Add the slash to find the correct subscription ID
+        std::string topic = "/" + args[1]; 
+        
+        if (subscriptions.find(topic) == subscriptions.end()) {
+            std::cout << "You are not subscribed to " << topic << std::endl;
+            return frames;
+        }
+
         int id = subscriptions[topic];
         receiptCounter++;
+        
         std::string frame = "UNSUBSCRIBE\nid:" + std::to_string(id) + "\nreceipt:" + std::to_string(receiptCounter) + "\n\n\0";
-        pendingReplies[receiptCounter] = "Exited channel " + topic;
+        pendingReplies[receiptCounter] = "Exited channel " + args[1];
         frames.push_back(frame);
+        
+        // Optional: Remove from map now or wait for receipt (Client logic choice)
+        subscriptions.erase(topic); 
     }
     else if (command == "logout") {
         receiptCounter++;
         std::string frame = "DISCONNECT\nreceipt:" + std::to_string(receiptCounter) + "\n\n\0";
         pendingReplies[receiptCounter] = "logout";
+
+        std::cout << "-> Sending logout frame.\n" << std::endl;
+
         frames.push_back(frame);
     }
     else if (command == "report") {
