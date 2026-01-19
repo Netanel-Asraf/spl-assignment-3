@@ -31,35 +31,38 @@ def recv_null_terminated(sock: socket.socket) -> str:
 
 
 def init_database():
-    if(os.path.exists(DB_FILE)):
-        return
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
 
-    c.execute("""CREATE TABLE IF NOT EXISTS Users (
+    # 1. users Table (Corrected schema for Java)
+    c.execute("""CREATE TABLE IF NOT EXISTS users (
         username TEXT PRIMARY KEY,
-        password TEXT NOT NULL
+        password TEXT NOT NULL,
+        registration_date TEXT
     )""")
     
-    c.execute("""CREATE TABLE IF NOT EXISTS Logins (
+    # 2. login_history Table (Renamed from 'Logins' to match Java)
+    c.execute("""CREATE TABLE IF NOT EXISTS login_history (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         username TEXT NOT NULL,
         login_time TEXT NOT NULL,
         logout_time TEXT,
-        FOREIGN KEY(username) REFERENCES Users(username)
+        FOREIGN KEY(username) REFERENCES users(username)
     )""")
     
-    c.execute("""CREATE TABLE IF NOT EXISTS Files (
+    # 3. file_tracking Table (Renamed from 'Files' to match Java)
+    c.execute("""CREATE TABLE IF NOT EXISTS file_tracking (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         username TEXT NOT NULL,
         filename TEXT NOT NULL,
         upload_time TEXT,
-        FOREIGN KEY(username) REFERENCES Users(username)
+        game_channel TEXT,
+        FOREIGN KEY(username) REFERENCES users(username)
     )""")
     
     conn.commit()
     conn.close()
-    print(f"[{SERVER_NAME}] Database initialized.")
+    print(f"[{SERVER_NAME}] Database initialized at {DB_FILE}")
 
 
 def execute_sql_command(sql_command: str) -> str:
@@ -69,7 +72,7 @@ def execute_sql_command(sql_command: str) -> str:
         c.execute(sql_command)
         conn.commit()
         conn.close()
-        return "done"
+        return "SUCCESS"
     except sqlite3.Error as e:
         return f"error: {e}"
 
@@ -85,12 +88,11 @@ def execute_sql_query(sql_query: str) -> str:
         if not rows:
             return ""
             
-        result = []
+        result = ["SUCCESS"]
         for row in rows:
-            row_str = "|".join(str(item) for item in row)
-            result.append(row_str)
+            result.append(str(row))
             
-        return "\n".join(result)
+        return "|".join(result)
         
     except sqlite3.Error as e:
         return f"error: {e}"
@@ -129,6 +131,7 @@ def handle_client(client_socket: socket.socket, addr):
 
 
 def start_server(host="127.0.0.1", port=7778):
+    init_database()
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 

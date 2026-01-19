@@ -13,7 +13,8 @@ StompProtocol::StompProtocol()
       userPassword(""),
       subscriptions(),
       pendingReplies(),
-      games()
+      games(),
+      gameLock()
     {}
 
 std::vector<std::string> StompProtocol::split(const std::string &str, char delimiter) {
