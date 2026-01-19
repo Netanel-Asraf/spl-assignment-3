@@ -8,7 +8,12 @@ StompProtocol::StompProtocol()
     : subscriptionCounter(0), 
       receiptCounter(0), 
       isConnected(false),
-      shouldTerminate(false)
+      shouldTerminate(false),
+      activeUser(""),
+      userPassword(""),
+      subscriptions(),
+      pendingReplies(),
+      games()
     {}
 
 std::vector<std::string> StompProtocol::split(const std::string &str, char delimiter) {
@@ -257,3 +262,4 @@ void StompProtocol::parseAndSaveGameMsg(const std::string& frame) {
         Event evt(team_a, team_b, event_name, time, general_updates, a_updates, b_updates, description, reported_by);
         game.events.push_back(evt);
     }
+}

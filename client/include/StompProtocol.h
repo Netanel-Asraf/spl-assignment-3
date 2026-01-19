@@ -1,19 +1,8 @@
 #pragma once
-
 #include "../include/ConnectionHandler.h"
+#include "../include/event.h"
 
-// Structs used in client memory
-struct Event {
-    std::string team_a_name;
-    std::string team_b_name;
-    std::string event_name;
-    int time;
-    std::map<std::string, std::string> general_game_updates;
-    std::map<std::string, std::string> team_a_updates;
-    std::map<std::string, std::string> team_b_updates;
-    std::string description;
-};
-
+// Struct used in client memory
 struct GameStats {
     std::string game_name;
     std::string team_a_name;
@@ -22,7 +11,14 @@ struct GameStats {
     std::map<std::string, std::string> team_a_stats;
     std::map<std::string, std::string> team_b_stats;
     std::vector<Event> events;
+
+    GameStats() : game_name(""), team_a_name(""), team_b_name(""), general_stats(), team_a_stats(), team_b_stats(), events() {}
+
+    GameStats(std::string game_name, std::string team_a_name, std::string team_b_name)
+        : game_name(game_name), team_a_name(team_a_name), team_b_name(team_b_name),
+          general_stats(), team_a_stats(), team_b_stats(), events() {}
 };
+
 // TODO: implement the STOMP protocol
 class StompProtocol
 {

@@ -68,7 +68,7 @@ const std::string &Event::get_reported_by() const
 }
 
 
-Event::Event(const std::string &frame_body) : team_a_name(""), team_b_name(""), name(""), time(0), game_updates(), team_a_updates(), team_b_updates(), description("")
+Event::Event(const std::string &frame_body) : team_a_name(""), team_b_name(""), name(""), time(0), game_updates(), team_a_updates(), team_b_updates(), description(""), reported_by("")
 {
 }
 

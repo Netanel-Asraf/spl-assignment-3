@@ -21,7 +21,6 @@ bool parseHostAndPort(const std::string& input, std::string& host, short& port) 
 
 int main(int argc, char *argv[]) {
 	// TODO: implement the STOMP client
-	return 0;
 
 	// Pointers for dynamic management
     ConnectionHandler* connectionHandler = nullptr;
@@ -29,7 +28,6 @@ int main(int argc, char *argv[]) {
     
     StompProtocol protocol;
     bool isConnected = false;	
-	bool shouldTerminate = false;
 
 	while (true)
 	{
@@ -73,7 +71,6 @@ int main(int argc, char *argv[]) {
                     while (isConnected) {
                         std::string answer;
                         if (!connectionHandler->getFrameAscii(answer, '\0')) {
-						// if (!connectionHandler->getLine(answer)) {
                             std::cout << "Disconnected from server.\n" << std::endl;
                             isConnected = false;
                             break;
@@ -101,7 +98,6 @@ int main(int argc, char *argv[]) {
 			std::vector<std::string> frames = protocol.processInput(line, *connectionHandler);
 			for(auto& frame : frames) {
 				if (!connectionHandler->sendBytes(frame.c_str(), frame.length())) {
-				// if(!connectionHandler->sendLine(frame)) {
 					std::cout << "Error sending message. Disconnecting.\n" << std::endl;
 					isConnected = false;
 					break;
@@ -123,5 +119,6 @@ int main(int argc, char *argv[]) {
             connectionHandler = nullptr;
 		}
 	}
+	return 0;
 }
 
