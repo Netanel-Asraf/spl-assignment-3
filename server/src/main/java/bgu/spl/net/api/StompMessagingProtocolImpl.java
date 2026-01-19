@@ -110,6 +110,7 @@ public class StompMessagingProtocolImpl implements StompMessagingProtocol<String
             connections.send(connectionId, receiptFrame.toString());
         }
 
+        connections.disconnect(connectionId);
         // 2. Mark for termination
         // The BaseServer loop checks this boolean. If true, it exits the loop and closes the socket.
         shouldTerminate = true; 
