@@ -9,6 +9,8 @@ public class StompMessagingProtocolImpl implements StompMessagingProtocol<String
     private int connectionId;
     private ConnectionsImpl<String> connections;
     private boolean shouldTerminate = false;
+
+    private String currentUser; //added this
     
     @Override
     public void start(int connectionId, Connections<String> connections) {
@@ -72,6 +74,32 @@ public class StompMessagingProtocolImpl implements StompMessagingProtocol<String
     }
 
     private void handleSend(Frame frame) {
+        // String topic = frame.getHeaders().get("destination");
+        // String body = frame.getBody();
+
+        // // 1. Validate
+        // if (topic == null) {
+        //     sendError(frame, "Malformed SEND frame: missing destination");
+        //     return;
+        // }
+
+        // // 2. Permission Check
+        // // "if a client is not subscribed to a topic it is not allowed to send messages to it" 
+        // if (!connections.isSubscribed(topic, connectionId)) {
+        //     sendError(frame, "Permission denied: You are not subscribed to this topic");
+        //     return;
+        // }
+
+        // // 3. Broadcast
+        // // We pass the 'body' string. ConnectionsImpl will wrap it in a MESSAGE frame.
+        // connections.send(topic, body);
+        
+        // // 4. Receipt (Optional)
+        // if (frame.getHeaders().containsKey("receipt")) {
+        //     Frame receiptFrame = new Frame("RECEIPT", new java.util.HashMap<>(), null);
+        //     receiptFrame.getHeaders().put("receipt-id", frame.getHeaders().get("receipt"));
+        //     connections.send(connectionId, receiptFrame.toString());
+        // }
         String topic = frame.getHeaders().get("destination");
         String body = frame.getBody();
 
@@ -82,22 +110,29 @@ public class StompMessagingProtocolImpl implements StompMessagingProtocol<String
         }
 
         // 2. Permission Check
-        // "if a client is not subscribed to a topic it is not allowed to send messages to it" 
         if (!connections.isSubscribed(topic, connectionId)) {
             sendError(frame, "Permission denied: You are not subscribed to this topic");
             return;
         }
 
-        // 3. Broadcast
-        // We pass the 'body' string. ConnectionsImpl will wrap it in a MESSAGE frame.
+        // 3. Database: Track File Upload (Requirement 3.3)
+        // We look for a custom header "filename" that the Client must send
+        String filename = frame.getHeaders().get("filename");
+        if (filename != null && currentUser != null) {
+            // This calls the Database function you wrote earlier
+            // It logs: username, filename, timestamp, and game_channel
+            bgu.spl.net.impl.data.Database.getInstance().trackFileUpload(currentUser, filename, topic);
+        }
+
+        // 4. Broadcast
         connections.send(topic, body);
-        
-        // 4. Receipt (Optional)
+
+        // 5. Receipt (Optional but good practice)
         if (frame.getHeaders().containsKey("receipt")) {
             Frame receiptFrame = new Frame("RECEIPT", new java.util.HashMap<>(), null);
             receiptFrame.getHeaders().put("receipt-id", frame.getHeaders().get("receipt"));
             connections.send(connectionId, receiptFrame.toString());
-        }
+        }       
     }
 
     private void handleDisconnect(Frame frame) {
@@ -141,27 +176,46 @@ public class StompMessagingProtocolImpl implements StompMessagingProtocol<String
     }
 
     private void handleConnect(Frame frame) {
+        // String login = frame.getHeaders().get("login");
+        // String passcode = frame.getHeaders().get("passcode");
+
+        // // 1. Validate Headers
+        // if (login == null || passcode == null) {
+        //     sendError(frame, "Malfromed Frame: Missing login or passcode header");
+        //     shouldTerminate = true; // Close connection
+        //     return;
+        // }
+
+        // // 2. Try to Login
+        // // We use our new 'connect' method in ConnectionsImpl
+        // boolean success = connections.connect(connectionId, login, passcode);
+
+        // if (success) {
+        //     // Login Success!
+        //     connections.send(connectionId, "CONNECTED\nversion:1.2\n\n");
+        // } else {
+        //     // Login Failed (Wrong password or already logged in)
+        //     sendError(frame, "Login failed: User already logged in or wrong password");
+        //     shouldTerminate = true; // Close connection after error [cite: 114]
+        // }
+
         String login = frame.getHeaders().get("login");
         String passcode = frame.getHeaders().get("passcode");
 
-        // 1. Validate Headers
         if (login == null || passcode == null) {
-            sendError(frame, "Malfromed Frame: Missing login or passcode header");
-            shouldTerminate = true; // Close connection
+            sendError(frame, "Malformed Frame: Missing login or passcode");
+            shouldTerminate = true;
             return;
         }
 
-        // 2. Try to Login
-        // We use our new 'connect' method in ConnectionsImpl
         boolean success = connections.connect(connectionId, login, passcode);
 
         if (success) {
-            // Login Success!
+            this.currentUser = login; // <--- SAVE THE USERNAME
             connections.send(connectionId, "CONNECTED\nversion:1.2\n\n");
         } else {
-            // Login Failed (Wrong password or already logged in)
             sendError(frame, "Login failed: User already logged in or wrong password");
-            shouldTerminate = true; // Close connection after error [cite: 114]
+            shouldTerminate = true;
         }
     }
 

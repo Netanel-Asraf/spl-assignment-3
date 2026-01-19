@@ -7,7 +7,8 @@ DO NOT CHANGE the server name or the basic protocol.
 Students should EXTEND this server by implementing
 the methods below.
 """
-
+import sqlite3
+import os
 import socket
 import sys
 import threading
@@ -30,15 +31,69 @@ def recv_null_terminated(sock: socket.socket) -> str:
 
 
 def init_database():
-    pass
+    if(os.path.exists(DB_FILE)):
+        return
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+
+    c.execute("""CREATE TABLE IF NOT EXISTS Users (
+        username TEXT PRIMARY KEY,
+        password TEXT NOT NULL
+    )""")
+    
+    c.execute("""CREATE TABLE IF NOT EXISTS Logins (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT NOT NULL,
+        login_time TEXT NOT NULL,
+        logout_time TEXT,
+        FOREIGN KEY(username) REFERENCES Users(username)
+    )""")
+    
+    c.execute("""CREATE TABLE IF NOT EXISTS Files (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT NOT NULL,
+        filename TEXT NOT NULL,
+        upload_time TEXT,
+        FOREIGN KEY(username) REFERENCES Users(username)
+    )""")
+    
+    conn.commit()
+    conn.close()
+    print(f"[{SERVER_NAME}] Database initialized.")
 
 
 def execute_sql_command(sql_command: str) -> str:
-    return "done"
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        c = conn.cursor()
+        c.execute(sql_command)
+        conn.commit()
+        conn.close()
+        return "done"
+    except sqlite3.Error as e:
+        return f"error: {e}"
 
 
 def execute_sql_query(sql_query: str) -> str:
-    return "done"
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        c = conn.cursor()
+        c.execute(sql_query)
+        rows = c.fetchall()
+        conn.close()
+        
+        if not rows:
+            return ""
+            
+        result = []
+        for row in rows:
+            row_str = "|".join(str(item) for item in row)
+            result.append(row_str)
+            
+        return "\n".join(result)
+        
+    except sqlite3.Error as e:
+        return f"error: {e}"
 
 
 def handle_client(client_socket: socket.socket, addr):
@@ -50,10 +105,18 @@ def handle_client(client_socket: socket.socket, addr):
             if message == "":
                 break
 
-            print(f"[{SERVER_NAME}] Received:")
-            print(message)
+            print(f"[{SERVER_NAME}] Received SQL: {message}")
 
-            client_socket.sendall(b"done\0")
+            command_type = message.strip().split(" ", 1)[0].upper()
+            
+            response = ""
+            if command_type == "SELECT":
+                response = execute_sql_query(message)
+            else:
+                response = execute_sql_command(message)
+
+           
+            client_socket.sendall(response.encode("utf-8") + b"\0")
 
     except Exception as e:
         print(f"[{SERVER_NAME}] Error handling client {addr}: {e}")

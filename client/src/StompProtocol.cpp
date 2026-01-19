@@ -95,8 +95,8 @@ std::vector<std::string> StompProtocol::processInput(const std::string& line, Co
         }
 
         for (const auto& event : parsed_data.events) {
-            std::string frame = "SEND\ndestination:/" + parsed_data.team_a_name + "_" + parsed_data.team_b_name + "\n\n";
-            
+            std::string frame = "SEND\ndestination:/" + parsed_data.team_a_name + "_" + parsed_data.team_b_name + "\n";
+            frame += "filename:" + filename + "\n\n"; 
             // Body (Strict formatting required by assignment)
             frame += "user: " + activeUser + "\n";
             frame += "team a: " + parsed_data.team_a_name + "\n";
