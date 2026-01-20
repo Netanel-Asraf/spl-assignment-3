@@ -117,11 +117,19 @@ public class Reactor<T> implements Server<T> {
     // ... (keep the rest of Reactor.java the same) ...
     /*package*/ void updateInterestedOps(SocketChannel chan, int ops) {
         final SelectionKey key = chan.keyFor(selector);
+        // FIX: If the connection is closed, the key will be null. Just ignore it!
+        if (key == null) {
+            return; 
+        }
+
         if (Thread.currentThread() == selectorThread) {
             key.interestOps(ops);
         } else {
             selectorTasks.add(() -> {
-                key.interestOps(ops);
+                // Validate again just in case it was cancelled while waiting in the queue
+                if (key.isValid()) {
+                    key.interestOps(ops);
+                }
             });
             selector.wakeup();
         }

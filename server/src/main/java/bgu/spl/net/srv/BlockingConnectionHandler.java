@@ -42,7 +42,11 @@ public class BlockingConnectionHandler<T> implements Runnable, ConnectionHandler
             }
 
         } catch (IOException ex) {
-            ex.printStackTrace();
+            if (ex.getMessage() != null && ex.getMessage().contains("Connection reset")) {
+               // Optional: System.out.println("Client disconnected abruptly.");
+            } else {
+               ex.printStackTrace();
+            }
         }
 
     }

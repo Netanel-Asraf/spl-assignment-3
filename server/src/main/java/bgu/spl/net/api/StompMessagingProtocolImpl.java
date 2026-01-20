@@ -59,6 +59,8 @@ public class StompMessagingProtocolImpl implements StompMessagingProtocol<String
         // 1. Validate
         if (topic == null || subId == null) {
             sendError(frame, "Malformed SUBSCRIBE frame: missing destination or id");
+            connections.disconnect(connectionId); // <--- ADD THIS
+            shouldTerminate = true;               // <--- ADD THIS
             return;
         }
 
@@ -106,12 +108,16 @@ public class StompMessagingProtocolImpl implements StompMessagingProtocol<String
         // 1. Validate
         if (topic == null) {
             sendError(frame, "Malformed SEND frame: missing destination");
+            connections.disconnect(connectionId); // <--- ADD THIS
+            shouldTerminate = true;               // <--- ADD THIS
             return;
         }
 
         // 2. Permission Check
         if (!connections.isSubscribed(topic, connectionId)) {
             sendError(frame, "Permission denied: You are not subscribed to this topic");
+            connections.disconnect(connectionId); // <--- ADD THIS
+            shouldTerminate = true;               // <--- ADD THIS
             return;
         }
 
@@ -161,6 +167,8 @@ public class StompMessagingProtocolImpl implements StompMessagingProtocol<String
         // 1. Validate
         if (subId == null) {
             sendError(frame, "Malformed UNSUBSCRIBE frame: missing id header");
+            connections.disconnect(connectionId); // <--- ADD THIS
+            shouldTerminate = true;               // <--- ADD THIS
             return;
         }
 
