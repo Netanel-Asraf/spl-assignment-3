@@ -37,6 +37,12 @@ std::vector<std::string> StompProtocol::processInput(const std::string& line, Co
     std::string command = args[0];
 
     if (command == "login") {
+        std::lock_guard<std::mutex> lock(gameLock);
+        if (isConnected) {
+            std::cout << "The client is already logged in, log out before trying again" << std::endl;
+            return frames;
+        }
+
         activeUser = args[2];
         userPassword = args[3];
         std::string frame = "CONNECT\naccept-version:1.2\nhost:stomp.cs.bgu.ac.il\nlogin:" + activeUser + "\npasscode:" + userPassword + "\n\n\0";
@@ -44,26 +50,44 @@ std::vector<std::string> StompProtocol::processInput(const std::string& line, Co
     }
     else if (command == "join") {
         std::string topic = "/" + args[1]; 
-        receiptCounter++; subscriptionCounter++;
-        subscriptions[topic] = subscriptionCounter;
-        pendingReplies[receiptCounter] = "Joined channel " + args[1]; 
+
+        {
+            std::lock_guard<std::mutex> lock(gameLock);
+            if (subscriptions.find(topic) != subscriptions.end()) {
+                 std::cout << "The client is already subscribed to channel " << args[1] << std::endl;
+                 return frames;
+            }
+            
+            receiptCounter++; subscriptionCounter++;
+            subscriptions[topic] = subscriptionCounter;
+            pendingReplies[receiptCounter] = "Joined channel " + args[1]; 
+        } 
+
         std::string frame = "SUBSCRIBE\ndestination:" + topic + "\nid:" + std::to_string(subscriptionCounter) + "\nreceipt:" + std::to_string(receiptCounter) + "\n\n\0";
         frames.push_back(frame);
     }
     else if (command == "exit") {
         std::string topic = "/" + args[1]; 
-        if (subscriptions.find(topic) == subscriptions.end()) {
-            std::cout << "You are not subscribed to " << topic << std::endl;
-            return frames;
+        int id = -1;
+
+        {
+            std::lock_guard<std::mutex> lock(gameLock);
+            if (subscriptions.find(topic) == subscriptions.end()) {
+                std::cout << "You are not subscribed to " << topic << std::endl;
+                return frames;
+            }
+            id = subscriptions[topic];
+            subscriptions.erase(topic); 
+            
+            receiptCounter++;
+            pendingReplies[receiptCounter] = "Exited channel " + args[1];
         }
-        int id = subscriptions[topic];
-        receiptCounter++;
+
         std::string frame = "UNSUBSCRIBE\nid:" + std::to_string(id) + "\nreceipt:" + std::to_string(receiptCounter) + "\n\n\0";
-        pendingReplies[receiptCounter] = "Exited channel " + args[1];
         frames.push_back(frame);
-        subscriptions.erase(topic); 
     }
     else if (command == "logout") {
+        std::lock_guard<std::mutex> lock(gameLock); 
         receiptCounter++;
         std::string frame = "DISCONNECT\nreceipt:" + std::to_string(receiptCounter) + "\n\n\0";
         pendingReplies[receiptCounter] = "logout";
@@ -82,10 +106,14 @@ std::vector<std::string> StompProtocol::processInput(const std::string& line, Co
         std::string game_name = parsed_data.team_a_name + "_" + parsed_data.team_b_name;
         std::string topic_name = "/" + game_name;
 
-        if (subscriptions.find(topic_name) == subscriptions.end()) {
-            std::cout << "Error: You are not subscribed to " << game_name << ". Please join the channel first!" << std::endl;
-            return frames; 
+        {
+            std::lock_guard<std::mutex> lock(gameLock);
+            if (subscriptions.find(topic_name) == subscriptions.end()) {
+                std::cout << "Error: You are not subscribed to " << game_name << ". Please join the channel first!" << std::endl;
+                return frames; 
+            }
         }
+
         for (const auto& event : parsed_data.events) {
             std::string frame = "SEND\ndestination:/" + parsed_data.team_a_name + "_" + parsed_data.team_b_name + "\n";
             frame += "filename:" + filename + "\n\n"; 
@@ -113,10 +141,6 @@ std::vector<std::string> StompProtocol::processInput(const std::string& line, Co
 
         if(games.find(game_name) == games.end()) {
             std::cerr << "Error: Game '" << game_name << "' not found in memory." << std::endl;
-            std::cerr << "Available games:" << std::endl;
-            for(const auto& pair : games) {
-                std::cerr << " - '" << pair.first << "'" << std::endl;
-            }
             return frames;
         }
 
@@ -156,11 +180,10 @@ std::vector<std::string> StompProtocol::processInput(const std::string& line, Co
 
 bool StompProtocol::processServerResponse(std::string& frame) {
     std::vector<std::string> lines = split(frame, '\n');
-    
-    // FIX IS HERE: We MUST trim the command!
     std::string command = trim(lines[0]); 
 
     if (command == "CONNECTED") {
+        std::lock_guard<std::mutex> lock(gameLock); 
         std::cout << "Login successful." << std::endl;
         isConnected = true;
     }
@@ -172,6 +195,9 @@ bool StompProtocol::processServerResponse(std::string& frame) {
                 break; 
             }
         }
+
+        std::unique_lock<std::mutex> lock(gameLock);
+
         if (pendingReplies.find(receiptId) != pendingReplies.end()) {
             std::string action = pendingReplies[receiptId];
             if (action == "logout") {
@@ -199,6 +225,7 @@ bool StompProtocol::processServerResponse(std::string& frame) {
     else if (command == "ERROR") {
         std::cout << "Error from server:\n" << frame << std::endl;
         if(frame.find("User already logged in") != std::string::npos) {
+            std::lock_guard<std::mutex> lock(gameLock);
             shouldTerminate = true;
         }
         return false;
@@ -216,9 +243,6 @@ void StompProtocol::parseAndSaveGameMsg(const std::string& frame) {
     int time = 0;
     std::string team_a, team_b, event_name, description, reported_by = "";
     std::map<std::string, std::string> general_updates, a_updates, b_updates;
-
-    // DEBUG: Prove the function is running
-    std::cout << "[DEBUG] Processing Body Lines: " << lines.size() << std::endl;
 
     for (const auto& line : lines) {
         if (line.empty() || line == "\0") continue;
@@ -249,13 +273,9 @@ void StompProtocol::parseAndSaveGameMsg(const std::string& frame) {
         }
     }
 
-    if (team_a.empty() || team_b.empty()) {
-        std::cout << "[DEBUG] ERROR: Could not find team names!" << std::endl;
-        return; 
-    }
+    if (team_a.empty() || team_b.empty()) return;
 
     std::string game_name = team_a + "_" + team_b;
-    std::cout << "[DEBUG] Saving game: '" << game_name << "'" << std::endl;
 
     std::lock_guard<std::mutex> lock(gameLock); 
     if (games.find(game_name) == games.end()) {
