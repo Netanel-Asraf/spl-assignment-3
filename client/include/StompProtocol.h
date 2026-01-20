@@ -2,7 +2,6 @@
 #include "../include/ConnectionHandler.h"
 #include "../include/event.h"
 
-// Struct used in client memory
 struct GameStats {
     std::string game_name;
     std::string team_a_name;

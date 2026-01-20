@@ -5,7 +5,6 @@
 #include <sstream>
 #include <algorithm> 
 
-// --- HELPER: TRIM FUNCTION ---
 std::string trim(const std::string& str) {
     size_t first = str.find_first_not_of(" \t\r\n");
     if (std::string::npos == first) {
@@ -91,7 +90,6 @@ std::vector<std::string> StompProtocol::processInput(const std::string& line, Co
         receiptCounter++;
         std::string frame = "DISCONNECT\nreceipt:" + std::to_string(receiptCounter) + "\n\n\0";
         pendingReplies[receiptCounter] = "logout";
-        std::cout << "-> Sending logout frame.\n" << std::endl;
         frames.push_back(frame);
     }
     else if (command == "report") {

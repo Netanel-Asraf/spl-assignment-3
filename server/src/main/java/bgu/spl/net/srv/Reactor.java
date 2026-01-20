@@ -2,7 +2,7 @@ package bgu.spl.net.srv;
 
 import bgu.spl.net.api.MessageEncoderDecoder;
 import bgu.spl.net.api.MessagingProtocol;
-import bgu.spl.net.api.StompMessagingProtocol; // Add this!
+import bgu.spl.net.api.StompMessagingProtocol; 
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.channels.ClosedSelectorException;
@@ -16,12 +16,12 @@ import java.util.function.Supplier;
 public class Reactor<T> implements Server<T> {
 
     private final int port;
-    private final Supplier<StompMessagingProtocol<T>> protocolFactory; // Change to Stomp factory
+    private final Supplier<StompMessagingProtocol<T>> protocolFactory; 
     private final Supplier<MessageEncoderDecoder<T>> readerFactory;
     private final ActorThreadPool pool;
     private Selector selector;
-    private final ConnectionsImpl<T> connections = new ConnectionsImpl<>(); // Add the Phonebook!
-    private int connectionIdCounter = 0; // Add the ID counter!
+    private final ConnectionsImpl<T> connections = new ConnectionsImpl<>(); 
+    private int connectionIdCounter = 0; 
 
     private Thread selectorThread;
     private final ConcurrentLinkedQueue<Runnable> selectorTasks = new ConcurrentLinkedQueue<>();
@@ -35,7 +35,6 @@ public class Reactor<T> implements Server<T> {
 
         this.pool = new ActorThreadPool(numThreads);
         this.port = port;
-        // CASTING MAGIC: Just like in BaseServer!
         this.protocolFactory = (Supplier<StompMessagingProtocol<T>>) (Object) protocolFactory;
         this.readerFactory = readerFactory;
     }
@@ -82,18 +81,15 @@ public class Reactor<T> implements Server<T> {
         SocketChannel clientChan = serverChan.accept();
         clientChan.configureBlocking(false);
 
-        // 1. Get the real Stomp protocol
         StompMessagingProtocol<T> stompProtocol = protocolFactory.get();
         
-        // 2. Initialize it
         stompProtocol.start(connectionIdCounter, connections);
 
-        // 3. THE ADAPTER: Bridge Stomp to the Reactor's expected interface
         MessagingProtocol<T> adapter = new MessagingProtocol<T>() {
             @Override
             public T process(T msg) {
                 stompProtocol.process(msg);
-                return null; // Stomp sends via connections.send()
+                return null; 
             }
             @Override
             public boolean shouldTerminate() {
@@ -107,17 +103,14 @@ public class Reactor<T> implements Server<T> {
                 clientChan,
                 this);
 
-        // 4. Register in Phonebook
         connections.connect(connectionIdCounter, handler);
         connectionIdCounter++;
 
         clientChan.register(selector, SelectionKey.OP_READ, handler);
     }
 
-    // ... (keep the rest of Reactor.java the same) ...
     /*package*/ void updateInterestedOps(SocketChannel chan, int ops) {
         final SelectionKey key = chan.keyFor(selector);
-        // FIX: If the connection is closed, the key will be null. Just ignore it!
         if (key == null) {
             return; 
         }
@@ -126,7 +119,6 @@ public class Reactor<T> implements Server<T> {
             key.interestOps(ops);
         } else {
             selectorTasks.add(() -> {
-                // Validate again just in case it was cancelled while waiting in the queue
                 if (key.isValid()) {
                     key.interestOps(ops);
                 }

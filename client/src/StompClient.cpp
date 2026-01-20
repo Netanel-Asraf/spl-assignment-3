@@ -21,8 +21,6 @@ bool parseHostAndPort(const std::string& input, std::string& host, short& port) 
 
 int main(int argc, char *argv[]) {
 	// TODO: implement the STOMP client
-
-	// Pointers for dynamic management
     ConnectionHandler* connectionHandler = nullptr;
     std::thread* socketThread = nullptr;
     
@@ -73,11 +71,9 @@ int main(int argc, char *argv[]) {
 				}
 
 				isConnected = true;
-				std::cout << "-> Connected to server.\n" << std::endl;
 				try{
 					socketThread = new std::thread([connectionHandler, &protocol, &isConnected]() {
 						try{
-						std::cout << "-> Socket thread started.\n" << std::endl;
 						while (isConnected) {
 							std::string answer;
 							if (!connectionHandler->getFrameAscii(answer, '\0')) {
@@ -86,7 +82,6 @@ int main(int argc, char *argv[]) {
 								break;
 							}
 
-							std::cout << "-> Received message from server.\n" << std::endl;
 							bool shouldContinue = protocol.processServerResponse(answer);
 							if (!shouldContinue) {
 								isConnected = false;
@@ -106,12 +101,8 @@ int main(int argc, char *argv[]) {
 					continue;
 				}
 
-				// Send frame
-				std::cout << "-> Sending login frame.\n" << std::endl;
 				std::vector<std::string> frames = protocol.processInput(line, *connectionHandler);
-				//for(auto& frame : frames) connectionHandler->sendLine(frame);
 				for(auto& frame : frames) {
-    				// FIX: Send with null delimiter so the server sees the end of the frame
 					connectionHandler->sendFrameAscii(frame, '\0'); 
 				}
 			}
@@ -122,17 +113,14 @@ int main(int argc, char *argv[]) {
 		}
 		else
 		{
-			// 1. Handle Double Login Check (Required by PDF)
 			std::string command = line.substr(0, line.find(' '));
 			if (command == "login") {
 				std::cout << "The client is already logged in, log out before trying again" << std::endl;
 				continue;
 			}
 
-			// 2. Send Frame with Null Byte Fix
 			std::vector<std::string> frames = protocol.processInput(line, *connectionHandler);
 			for(auto& frame : frames) {
-				// FIX: Use sendFrameAscii with '\0' to ensure server sees end of frame
 				if (!connectionHandler->sendFrameAscii(frame, '\0')) {
 					std::cout << "Error sending message. Disconnecting.\n" << std::endl;
 					isConnected = false;
@@ -145,21 +133,18 @@ int main(int argc, char *argv[]) {
 		{
 			connectionHandler->close();
 
-            // Join the thread to ensure it's finished
-            if (socketThread && socketThread->joinable()) {
+			if (socketThread && socketThread->joinable()) {
                 socketThread->join();
                 delete socketThread;
                 socketThread = nullptr;
             }
 			
-            // Close connection
             connectionHandler->close();
             delete connectionHandler;
             connectionHandler = nullptr;
 		}
 	}
 
-	// Cleanup on exit
 	if (connectionHandler != nullptr) {
         connectionHandler->close();
         if (socketThread && socketThread->joinable()) {
@@ -168,7 +153,6 @@ int main(int argc, char *argv[]) {
         }
         delete connectionHandler;
     }
-
 	return 0;
 }
 

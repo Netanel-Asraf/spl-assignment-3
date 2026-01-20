@@ -15,7 +15,6 @@ public class Database {
 	private Database() {
 		userMap = new ConcurrentHashMap<>();
 		connectionsIdMap = new ConcurrentHashMap<>();
-		// SQL server connection details
 		this.sqlHost = "127.0.0.1";
 		this.sqlPort = 7778;
 	}
@@ -34,11 +33,9 @@ public class Database {
 			 PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
 			 BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()))) {
 			
-			// Send SQL with null terminator
 			out.print(sql + '\0');
 			out.flush();
 			
-			// Read response until null terminator
 			StringBuilder response = new StringBuilder();
 			int ch;
 			while ((ch = in.read()) != -1 && ch != '\0') {
@@ -71,20 +68,17 @@ public class Database {
 			return LoginStatus.CLIENT_ALREADY_CONNECTED;
 		}
 		if (addNewUserCase(connectionId, username, password)) {
-			// Log new user registration in SQL
 			String sql = String.format(
 				"INSERT INTO users (username, password, registration_date) VALUES ('%s', '%s', datetime('now'))",
 				escapeSql(username), escapeSql(password)
 			);
 			executeSQL(sql);
 			
-			// Log login
 			logLogin(username);
 			return LoginStatus.ADDED_NEW_USER;
 		} else {
 			LoginStatus status = userExistsCase(connectionId, username, password);
 			if (status == LoginStatus.LOGGED_IN_SUCCESSFULLY) {
-				// Log successful login in SQL
 				logLogin(username);
 			}
 			return status;
@@ -133,7 +127,6 @@ public class Database {
 		User user = connectionsIdMap.get(connectionsId);
 		if (user != null) {
 			synchronized (user) {
-				// Log logout in SQL
 				String sql = String.format(
 					"UPDATE login_history SET logout_time=datetime('now') " +
 					"WHERE username='%s' AND logout_time IS NULL " +
@@ -171,7 +164,6 @@ public class Database {
 		System.out.println("SERVER REPORT - Generated at: " + java.time.LocalDateTime.now());
 		System.out.println(repeat("=", 80));
 		
-		// List all users
 		System.out.println("\n1. REGISTERED USERS:");
 		System.out.println(repeat("-", 80));
 		String usersSQL = "SELECT username, registration_date FROM users ORDER BY registration_date";
@@ -187,7 +179,6 @@ public class Database {
 			}
 		}
 		
-		// Login history for each user
 		System.out.println("\n2. LOGIN HISTORY:");
 		System.out.println(repeat("-", 80));
 		String loginSQL = "SELECT username, login_time, logout_time FROM login_history ORDER BY username, login_time DESC";
@@ -212,7 +203,6 @@ public class Database {
 			}
 		}
 		
-		// File uploads for each user
 		System.out.println("\n3. FILE UPLOADS:");
 		System.out.println(repeat("-", 80));
 		String filesSQL = "SELECT username, filename, upload_time, game_channel FROM file_tracking ORDER BY username, upload_time DESC";

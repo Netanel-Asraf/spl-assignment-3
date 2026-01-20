@@ -9,9 +9,8 @@ public class StompServer {
     @SuppressWarnings({"unchecked", "rawtypes"})
     public static void main(String[] args) {
         int port = 7777;
-        String serverType = "tpc"; // Default to TPC
+        String serverType = "tpc"; 
 
-        // We can now take the port and type from command line arguments!
         if (args.length >= 1) {
             port = Integer.parseInt(args[0]);
         }
@@ -29,7 +28,7 @@ public class StompServer {
         } else if (serverType.equals("reactor")) {
             System.out.println("Starting Reactor server on port " + port);
             Server.reactor(
-                Runtime.getRuntime().availableProcessors(), // Number of threads
+                Runtime.getRuntime().availableProcessors(), 
                 port,
                 (Supplier) StompMessagingProtocolImpl::new, 
                 StompMessageEncoderDecoder::new   

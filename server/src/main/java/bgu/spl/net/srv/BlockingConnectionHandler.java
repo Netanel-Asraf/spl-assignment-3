@@ -24,7 +24,7 @@ public class BlockingConnectionHandler<T> implements Runnable, ConnectionHandler
 
     @Override
     public void run() {
-        try (Socket sock = this.sock) { //just for automatic closing
+        try (Socket sock = this.sock) { 
             int read;
 
             in = new BufferedInputStream(sock.getInputStream());
@@ -43,7 +43,6 @@ public class BlockingConnectionHandler<T> implements Runnable, ConnectionHandler
 
         } catch (IOException ex) {
             if (ex.getMessage() != null && ex.getMessage().contains("Connection reset")) {
-               // Optional: System.out.println("Client disconnected abruptly.");
             } else {
                ex.printStackTrace();
             }
@@ -59,7 +58,6 @@ public class BlockingConnectionHandler<T> implements Runnable, ConnectionHandler
 
     @Override
     public void send(T msg) {
-        //IMPLEMENT IF NEEDED
         try {
             if (msg != null) {
                 out.write(encdec.encode(msg));
