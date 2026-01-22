@@ -167,7 +167,7 @@ std::vector<std::string> StompProtocol::processInput(const std::string& line, Co
         for(const auto& p : game.team_b_stats) file << p.first << ": " << p.second << "\n";
         file << "Game event reports:\n";
         for(const auto& event : summary_events) {
-            file << event.get_time() << " - " << event.get_name() << ":\n";
+            file << event.get_time() << " - " << event.get_name() << ":\n\n";
             file << event.get_description() << "\n\n";
         }
         file.close();
