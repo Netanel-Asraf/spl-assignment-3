@@ -160,11 +160,11 @@ std::vector<std::string> StompProtocol::processInput(const std::string& line, Co
         file << game.team_a_name << " vs " << game.team_b_name << "\n";
         file << "Game stats:\n";
         file << "General stats:\n";
-        for(const auto& p : game.general_stats) file << p.first << ":" << p.second << "\n";
+        for(const auto& p : game.general_stats) file << p.first << ": " << p.second << "\n";
         file << game.team_a_name << " stats:\n"; 
-        for(const auto& p : game.team_a_stats) file << p.first << ":" << p.second << "\n";
+        for(const auto& p : game.team_a_stats) file << p.first << ": " << p.second << "\n";
         file << game.team_b_name << " stats:\n";
-        for(const auto& p : game.team_b_stats) file << p.first << ":" << p.second << "\n";
+        for(const auto& p : game.team_b_stats) file << p.first << ": " << p.second << "\n";
         file << "Game event reports:\n";
         for(const auto& event : summary_events) {
             file << event.get_time() << " - " << event.get_name() << ":\n";
@@ -266,8 +266,8 @@ void StompProtocol::parseAndSaveGameMsg(const std::string& frame) {
                 else if (key == "time") time = std::stoi(value);
             } 
             else if (current_section == "general") general_updates[key] = value;
-            else if (current_section == "team a") a_updates[key] = value;
-            else if (current_section == "team b") b_updates[key] = value;
+            else if (current_section == "team_a") a_updates[key] = value;
+            else if (current_section == "team_b") b_updates[key] = value;
         }
     }
 
